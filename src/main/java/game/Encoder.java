@@ -1,5 +1,6 @@
 package org.lichess.compression.game;
 
+import java.util.*;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -7,7 +8,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
-
+import java.util.stream.Collectors;
 import java.nio.ByteBuffer;
 
 import org.lichess.compression.BitReader;
@@ -57,7 +58,8 @@ public class Encoder {
                 to = Bitboard.msb(board.rooks & Bitboard.RANKS[board.turn ?  0 : 7]);
             } else {
                 Matcher matcher = SAN_PATTERN.matcher(pgnMove);
-                if (!matcher.matches()) return null;
+
+                if (!matcher.matches()) {System.out.println("FAILED MATCH"); return null; }
 
                 String roleStr = matcher.group(1);
                 role = roleStr == null ? Role.PAWN : charToRole(roleStr.charAt(0));
@@ -88,14 +90,183 @@ public class Encoder {
                         board.play(legal);
                         foundMatch = true;
                     }
-                    else return null;
+                    else {
+                         System.out.println("NO MATCH2"); return null;
+                    }
                 }
             }
 
-            if (!foundMatch) return null;
+            if (!foundMatch) {System.out.println("NO MATCH2"); return null;}
         }
 
         return writer.toArray();
+    }
+
+
+    public static ArrayList<String> stringencode(String pgnMoves[]) {
+        System.out.println(pgnMoves != null);
+
+        ArrayList<String> moves = new ArrayList<String>();
+
+        Board board = new Board();
+        MoveList legals = moveList.get();
+
+        for (String pgnMove: pgnMoves) {
+            // Parse SAN.
+            Role role = null, promotion = null;
+            long from = Bitboard.ALL;
+            int to;
+
+            if (pgnMove.startsWith("O-O-O")) {
+                role = Role.KING;
+                from = board.kings;
+                to = Bitboard.lsb(board.rooks & Bitboard.RANKS[board.turn ? 0 : 7]);
+                // System.out.println("0-0-0: " + Long.toString(from) + " " + Integer.toString(to));
+            } else if (pgnMove.startsWith("O-O")) {
+                role = Role.KING;
+                from = board.kings;
+                to = Bitboard.msb(board.rooks & Bitboard.RANKS[board.turn ?  0 : 7]);
+                // System.out.println("0-0: " + Long.toString(from) + " " + Integer.toString(to));
+            } else {
+                Matcher matcher = SAN_PATTERN.matcher(pgnMove);
+                if (!matcher.matches()) {System.out.println("FAILED MATCH"); return null;}
+
+                String roleStr = matcher.group(1);
+                role = roleStr == null ? Role.PAWN : charToRole(roleStr.charAt(0));
+
+                if (matcher.group(2) != null) from &= Bitboard.FILES[matcher.group(2).charAt(0) - 'a'];
+                if (matcher.group(3) != null) from &= Bitboard.RANKS[matcher.group(3).charAt(0) - '1'];
+
+                to = Square.square(matcher.group(4).charAt(0) - 'a', matcher.group(4).charAt(1) - '1');
+
+                if (matcher.group(5) != null) {
+                    promotion = charToRole(matcher.group(5).charAt(0));
+                }
+            }
+
+            // Find index in legal moves.
+            board.legalMoves(legals);
+            legals.sort();
+
+            boolean foundMatch = false;
+            int size = legals.size();
+
+            for (int i = 0; i < size; i++) {
+                Move legal = legals.get(i);
+                if (legal.role == role && legal.to == to && legal.promotion == promotion && Bitboard.contains(from, legal.from)) {
+                    if (!foundMatch) {
+                        // Encode and play.
+                        moves.add(BITCODES[i]);
+                        board.play(legal);
+                        foundMatch = true;
+                    }
+                    else {System.out.println("NO MATCH"); return null;}
+                }
+            }
+
+            if (!foundMatch) {System.out.println("NO MATCH2"); return null;}
+        }
+
+        return moves;
+    }
+    public static ArrayList<String> stringencodescores(String pgnMoves[]) {
+
+        ArrayList<String> moves = new ArrayList<String>();
+
+        Board board = new Board();
+        MoveList legals = moveList.get();
+
+        int tot = 0;
+        for (String pgnMove: pgnMoves) {
+            // Parse SAN.
+            Role role = null, promotion = null;
+            long from = Bitboard.ALL;
+            int to;
+
+            if (pgnMove.startsWith("O-O-O")) {
+                role = Role.KING;
+                from = board.kings;
+                to = Bitboard.lsb(board.rooks & Bitboard.RANKS[board.turn ? 0 : 7]);
+            } else if (pgnMove.startsWith("O-O")) {
+                role = Role.KING;
+                from = board.kings;
+                to = Bitboard.msb(board.rooks & Bitboard.RANKS[board.turn ?  0 : 7]);
+            } else {
+                Matcher matcher = SAN_PATTERN.matcher(pgnMove);
+                if (!matcher.matches()) { System.out.println("MATCH FAILED: " + pgnMove); return null;}
+
+                String roleStr = matcher.group(1);
+                role = roleStr == null ? Role.PAWN : charToRole(roleStr.charAt(0));
+
+                if (matcher.group(2) != null) from &= Bitboard.FILES[matcher.group(2).charAt(0) - 'a'];
+                if (matcher.group(3) != null) from &= Bitboard.RANKS[matcher.group(3).charAt(0) - '1'];
+
+                to = Square.square(matcher.group(4).charAt(0) - 'a', matcher.group(4).charAt(1) - '1');
+
+                if (matcher.group(5) != null) {
+                    promotion = charToRole(matcher.group(5).charAt(0));
+                }
+            }
+
+            // Find index in legal moves.
+            board.legalMoves(legals);
+            legals.sort();
+
+            boolean foundMatch = false;
+            int size = legals.size();
+
+            for (int i = 0; i < size; i++) {
+                Move legal = legals.get(i);
+                if (legal.role == role && legal.to == to && legal.promotion == promotion && Bitboard.contains(from, legal.from)) {
+                    if (!foundMatch) {
+                        // Encode and play.
+                        // moves.add(legal.uci() + ", " + pgnMove + ", " + Integer.toString(i) + ", " + BITCODES[i]);
+                        String score_bits =  Integer.toBinaryString(legal.score);
+                        if (score_bits.length() < 32) {
+                            score_bits = "0".repeat(32 - score_bits.length()) + score_bits;
+                        }
+                        // if (pgnMove.startsWith("Qff7")) {
+                        //     List<Move> legal_moves = legals.getMoveList();
+                        //     List<String> names = legal_moves.stream().map(v -> v.uci()).map(String.class::cast).collect(Collectors.toList());
+                        //     List<String> scores = legal_moves.stream().map(v -> Integer.toString(v.score)).collect(Collectors.toList());
+
+                        //     System.out.println(String.join(", ", names ));
+                        //     System.out.println(String.join(", ", scores));
+
+                        // }
+                        // System.out.println(pgnMove + ", " + Integer.toString(i) + ", " + BITCODES[i] + ", " + score_bits);
+                        moves.add(BITCODES[i].substring(2));
+
+                        board.play(legal);
+                        tot += BITCODES[i].length() - 2;
+                        foundMatch = true;
+                    }
+                    else {System.out.println("NO MATCH"); return null;}
+                }
+            }
+
+            if (!foundMatch) {System.out.println("NO MATCH2"); return null;}
+        }
+        // System.out.println(tot);
+        return moves;
+    }
+
+    public static ArrayList<String> getBestMoves(int max_moves) {
+
+        ArrayList<String> moves = new ArrayList<String>();
+
+        Board board = new Board();
+        MoveList legals = moveList.get();
+
+        for (int i = 0; i < max_moves; i++) {
+            board.legalMoves(legals);
+            legals.sort();
+            // Move legal = legals.get(legals.size()-1);
+            Move legal = legals.get(0);
+            moves.add(legal.uci() + ", " + Integer.toString(legal.score) + ", 0, 0b00");
+            board.play(legal);
+        }
+        return moves;
     }
 
     public static class DecodeResult {
@@ -226,4 +397,7 @@ public class Encoder {
         buffer[base + 1] = (byte) (hash >>> 8);
         buffer[base + 2] = (byte) hash;
     }
+
+    private static final String BITCODES[] = {
+        "0b00","0b100","0b1101","0b1010","0b0101","0b11101","0b10111","0b01110","0b01100","0b01000","0b111101","0b111001","0b111100","0b110011","0b110010","0b110000","0b101101","0b101100","0b011111","0b011011","0b010011","0b011010","0b1111111","0b1111101","0b1111110","0b1111100","0b1110000","0b1100011","0b0111101","0b0100101","0b0100100","0b11100010","0b11000101","0b01111001","0b111000111","0b110001001","0b011110001","0b011110000","0b1110001100","0b1100010000","0b11100011010","0b11000100010","0b111000110110","0b110001000110","0b1110001101110","0b1100010001110","0b11100011011110","0b11000100011110","0b111000110111110","0b110001000111110","0b1110001101111110","0b1100010001111110","0b11000100011111111","0b111000110111111111","0b111000110111111101","0b110001000111111100","0b1110001101111111100","0b1100010001111111011","0b11100011011111111011","0b11100011011111110010","0b11100011011111110000","0b111000110111111110101","0b111000110111111100110","0b111000110111111100010","0b110001000111111101001","0b110001000111111101000","0b1110001101111111101000","0b1110001101111111000110","0b1100010001111111010111","0b1100010001111111010101","0b11100011011111111010011","0b11100011011111110011110","0b11100011011111110001110","0b11100011011111110001111","0b11000100011111110101100","0b111000110111111100111011","0b111000110111111110100100","0b111000110111111100111111","0b111000110111111100111010","0b110001000111111101011011","0b110001000111111101010011","0b110001000111111101010001","0b1110001101111111001110011","0b1110001101111111001110001","0b1110001101111111001110010","0b1100010001111111010100101","0b1100010001111111010110100","0b1100010001111111010100001","0b11100011011111110011111011","0b11100011011111110011111001","0b11100011011111110011111010","0b11100011011111110011111000","0b11000100011111110101101011","0b111000110111111110100101111","0b110001000111111101011010100","0b110001000111111101011010101","0b111000110111111100111000010","0b111000110111111100111000011","0b110001000111111101010010011","0b1110001101111111101001010011","0b1100010001111111010100100101","0b1110001101111111001110000011","0b1110001101111111001110000010","0b1110001101111111001110000000","0b11100011011111110011100000010","0b11000100011111110101000001001","0b11100011011111110011100000011","0b11000100011111110101000001000","0b11000100011111110101000000011","0b110001000111111101010000011110","0b111000110111111110100101100110","0b111000110111111110100101010111","0b110001000111111101010000001101","0b111000110111111110100101100010","0b110001000111111101010000001000","0b110001000111111101010000000101","0b110001000111111101010000000000","0b110001000111111101010000001010","0b110001000111111101010010001101","0b110001000111111101010010010011","0b110001000111111101010010010010","0b110001000111111101010010010001","0b110001000111111101010010010000","0b110001000111111101010010001011","0b110001000111111101010010001010","0b110001000111111101010010001001","0b110001000111111101010010001000","0b110001000111111101010010000111","0b110001000111111101010010000110","0b110001000111111101010010000011","0b110001000111111101010010000010","0b110001000111111101010000011011","0b110001000111111101010000011010","0b110001000111111101010000011001","0b110001000111111101010000011000","0b110001000111111101010000010101","0b110001000111111101010000010100","0b110001000111111101010010000101","0b110001000111111101010010000100","0b110001000111111101010000011111","0b110001000111111101010000011101","0b110001000111111101010000011100","0b110001000111111101010010000001","0b110001000111111101010010000000","0b110001000111111101010000001111","0b110001000111111101010000001110","0b110001000111111101010000001100","0b110001000111111101010000010111","0b110001000111111101010000010110","0b110001000111111101010000001001","0b110001000111111101010000000100","0b110001000111111101010000000011","0b110001000111111101010000000010","0b110001000111111101010000000001","0b110001000111111101010000001011","0b110001000111111101010010001111","0b110001000111111101010010001110","0b110001000111111101010010001100","0b1110001101111111101001010111101","0b1110001101111111101001010111111","0b1110001101111111101001010100010","0b1110001101111111101001011011111","0b1110001101111111101001010100100","0b1110001101111111101001010111001","0b1110001101111111101001011011010","0b1110001101111111101001011010010","0b1110001101111111101001011010000","0b1110001101111111101001010111010","0b1110001101111111101001010001011","0b1110001101111111101001010001010","0b1110001101111111101001010001001","0b1110001101111111101001010001000","0b1110001101111111101001010000111","0b1110001101111111101001010000110","0b1110001101111111101001010000101","0b1110001101111111101001010000100","0b1110001101111111101001011010111","0b1110001101111111101001011010110","0b1110001101111111101001011010101","0b1110001101111111101001011010100","0b1110001101111111101001010110111","0b1110001101111111101001010110110","0b1110001101111111101001010010101","0b1110001101111111101001010010100","0b1110001101111111101001010110101","0b1110001101111111101001010110100","0b1110001101111111101001010010111","0b1110001101111111101001010010110","0b1110001101111111101001010110001","0b1110001101111111101001010110000","0b1110001101111111101001010010011","0b1110001101111111101001010010010","0b1110001101111111101001011101101","0b1110001101111111101001011101100","0b1110001101111111101001011101011","0b1110001101111111101001011101010","0b1110001101111111101001011100111","0b1110001101111111101001011100110","0b1110001101111111101001010010001","0b1110001101111111101001010010000","0b1110001101111111101001011100011","0b1110001101111111101001011100010","0b1110001101111111101001011100001","0b1110001101111111101001011100000","0b1110001101111111101001011101001","0b1110001101111111101001011101000","0b1110001101111111101001010001111","0b1110001101111111101001010001110","0b1110001101111111101001010000011","0b1110001101111111101001010000010","0b1110001101111111101001010001101","0b1110001101111111101001010001100","0b1110001101111111101001011001111","0b1110001101111111101001011001110","0b1110001101111111101001010000001","0b1110001101111111101001010000000","0b1110001101111111101001011011001","0b1110001101111111101001011011000","0b1110001101111111101001011100101","0b1110001101111111101001011100100","0b1110001101111111101001010101101","0b1110001101111111101001010101100","0b1110001101111111101001010110011","0b1110001101111111101001010110010","0b1110001101111111101001010101001","0b1110001101111111101001010101000","0b1110001101111111101001011101111","0b1110001101111111101001011101110","0b1110001101111111101001011001011","0b1110001101111111101001011001010","0b1110001101111111101001011000011","0b1110001101111111101001011000010","0b1110001101111111101001010101011","0b1110001101111111101001010101010","0b1110001101111111101001011001001","0b1110001101111111101001011001000","0b1110001101111111101001011000111","0b1110001101111111101001011000110","0b1110001101111111101001011000001","0b1110001101111111101001011000000","0b1110001101111111101001010111100","0b1110001101111111101001010100111","0b1110001101111111101001010100110","0b1110001101111111101001010111110","0b1110001101111111101001010100011","0b1110001101111111101001010100001","0b1110001101111111101001010100000","0b1110001101111111101001011011110","0b1110001101111111101001010100101","0b1110001101111111101001011011101","0b1110001101111111101001011011100","0b1110001101111111101001010111000","0b1110001101111111101001011011011","0b1110001101111111101001011010001","0b1110001101111111101001011010011","0b1110001101111111101001010111011"};
 }

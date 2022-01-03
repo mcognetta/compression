@@ -12,7 +12,7 @@ final class Move implements Comparable<Move> {
     public int to;
     public Role promotion;
 
-    private int score;
+    public int score;
 
     void set(Board board, int type, Role role, int from, boolean capture, int to, Role promotion) {
         // Overwrite the current move. This is like a constructor, but reuses

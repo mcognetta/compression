@@ -1,6 +1,7 @@
 package org.lichess.compression.game
 
 import org.specs2.mutable._
+import scala.io.Source
 
 class HuffmanPgnTest extends Specification {
 
@@ -62,6 +63,24 @@ class HuffmanPgnTest extends Specification {
 
       val decoded = Encoder.decode(encoded, pgnMoves.size)
       Option(decoded.lastUci) must_== Some("f6e6")
+    }
+
+    "stringencode test" in {
+      // val pgnMoves = "e4 e5 Nf3 Nc6 Bc4 Nf6 d4 exd4 O-O Bc5 e5 d5 exf6 dxc4 Re1+ Be6 Ng5 Qxf6 Nxe6 Qxe6".split(" ")
+      // val encoded = Encoder.stringencode(pgnMoves)
+
+      // System.out.println(encoded);
+
+      // encoded.size() must_== 20
+
+
+      val filename = "/home/mc/Desktop/openings_list.txt"
+      for (line <- Source.fromFile(filename).getLines()) {
+          val encoding = Encoder.stringencode(line.split(" "))
+          System.out.println(line + ": " + String.join(",", encoding))
+      }
+
+      20 must_== 20
     }
 
     "position hash 1. e4 d5 2. e5 f5 3. Ke2 Kf7" in {

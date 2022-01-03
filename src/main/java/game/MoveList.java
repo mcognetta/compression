@@ -2,6 +2,10 @@ package org.lichess.compression.game;
 
 import java.util.Arrays;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.Collections;
+import java.util.*;
+
 
 final class MoveList {
     // A move list that reuses a pool of moves, never allocating new objects.
@@ -20,6 +24,12 @@ final class MoveList {
         for (int i = 0; i < buffer.length; i++) {
             buffer[i] = new Move();
         }
+    }
+
+    public List<Move> getMoveList() {
+        ArrayList<Move> out = new ArrayList<Move>();
+        Collections.addAll(out, buffer);
+        return out.subList(0, this.size);
     }
 
     public void clear() {
